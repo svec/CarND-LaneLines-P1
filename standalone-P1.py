@@ -306,8 +306,10 @@ def find_lanes_in_file(filename):
     imshow_full_size(houghed_img, cmap='gray')
 
     # Draw the lines on the edge image
-    lines_edges = cv2.addWeighted(color_edges, 0.8, houghed_img, 1, 0) 
-    imshow_full_size(lines_edges, cmap='gray')
+    #lines_edges = cv2.addWeighted(color_edges, 0.8, houghed_img, 1, 0) 
+    #imshow_full_size(lines_edges, cmap='gray')
+    lines_edges = cv2.addWeighted(image, 0.8, houghed_img, 1, 0) 
+    imshow_full_size(lines_edges);
 
     #plt.subplots_adjust(left=0.0, bottom=0, right=1, top=1,
                     #wspace=0.02, hspace=0.02)
