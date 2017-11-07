@@ -100,7 +100,7 @@ def weighted_img(img, initial_img, α=0.8, β=1., λ=0.):
     """
     return cv2.addWeighted(initial_img, α, img, β, λ)
 
-def imshow_full_size(img, *args, **kwargs):
+def imshow_full_size(img, title=False, *args, **kwargs):
     dpi = 100
     margin = 0.05 # (5% of the width/height of the figure...)
     ypixels, xpixels = img.shape[0], img.shape[1]
@@ -112,83 +112,214 @@ def imshow_full_size(img, *args, **kwargs):
     # Make the axis the right size...
     ax = fig.add_axes([margin, margin, 1 - 2*margin, 1 - 2*margin])
     ax.imshow(img, interpolation='none', *args, **kwargs)
+    if title:
+        plt.title(title)
     plt.show()
 
-#reading in an image
-image = mpimg.imread('test_images/solidWhiteRight.jpg')
+def main_loop():
+    #reading in an image
+    image = mpimg.imread('test_images/solidWhiteRight.jpg')
 
-height, width, depth = image.shape
+    height, width, depth = image.shape
 
-#printing out some stats and plotting
-print('This image is:', type(image), 'with dimensions:', image.shape)
-#imshow_full_size(image)
+    #printing out some stats and plotting
+    print('This image is:', type(image), 'with dimensions:', image.shape)
+    #imshow_full_size(image)
 
-# To show multiple images, call plt.figure() start a new figure.
-# Subsequent calls to plt.imshow() will appear in a new window.
+    # To show multiple images, call plt.figure() start a new figure.
+    # Subsequent calls to plt.imshow() will appear in a new window.
 
-# Convert to grayscale
-gray = cv2.cvtColor(image,cv2.COLOR_RGB2GRAY)
+    # Convert to grayscale
+    gray = cv2.cvtColor(image,cv2.COLOR_RGB2GRAY)
 
-#imshow_full_size(gray, cmap='gray')
+    #imshow_full_size(gray, cmap='gray')
 
-top_of_mask = 300
-lower_left  = (140, height-1)
-upper_left  = (475, top_of_mask)
-upper_right = (500, top_of_mask)
-lower_right = (860, height-1)
+    top_of_mask = 310
+    lower_left  = (140, height-1)
+    upper_left  = (475, top_of_mask)
+    upper_right = (500, top_of_mask)
+    lower_right = (860, height-1)
 
-bounding_shape = np.array([[lower_left, upper_left, upper_right, lower_right]], dtype=np.int32)
-masked_gray = region_of_interest(gray, bounding_shape)
-#imshow_full_size(masked_gray, cmap='gray')
+    bounding_shape = np.array([[lower_left, upper_left, upper_right, lower_right]], dtype=np.int32)
+    masked_gray = region_of_interest(gray, bounding_shape)
+    #imshow_full_size(masked_gray, cmap='gray')
 
-plt.figure()
-# Define a kernel size and apply Gaussian smoothing
-kernels = [5, 7, 9]
-subplot_rows = 3
-subplot_cols = len(kernels)
-for index, kernel in enumerate(kernels):
-    subplot_index = index+1
-    plt.subplot(subplot_rows, subplot_cols,subplot_index)
-    blur_gray = gaussian_blur(gray, kernel)
-    plt.title(subplot_index)
-    plt.imshow(blur_gray, cmap='gray')
+    #kernels_loop(gray, bounding_shape)
+    hough_loop(gray, bounding_shape)
+
+def kernels_loop(gray, bounding_shape):
+    plt.figure()
+    # Define a kernel size and apply Gaussian smoothing
+    kernels = [5]
+    subplot_rows = 3
+    subplot_cols = len(kernels)
+    for index, kernel in enumerate(kernels):
+        subplot_index = index+1
+        plt.subplot(subplot_rows, subplot_cols,subplot_index)
+        blur_gray = gaussian_blur(gray, kernel)
+        plt.title(subplot_index)
+        plt.imshow(blur_gray, cmap='gray')
+        
+        # Define our parameters for Canny and apply
+        low_threshold = 50
+        high_threshold = 150
+        edges = canny(blur_gray, low_threshold, high_threshold)
     
+        #plt.subplot(subplot_rows, subplot_cols,index+(subplot_cols*1)+1)
+        #plt.imshow(edges, cmap='gray')
+        #imshow_full_size(edges, cmap='gray')
+        #imshow_full_size(edges, cmap='Greys_r') # Udacity quiz uses Greys_r
+    
+        masked_canny = region_of_interest(edges, bounding_shape)
+        plt.subplot(subplot_rows, subplot_cols,index+(subplot_cols*1)+1)
+        plt.imshow(masked_canny, cmap='gray')
+        #imshow_full_size(masked_canny, cmap='gray')
+    
+        # Define the Hough transform parameters
+        # Original from offical lecture 'solution'
+        #   rho = 2 # distance resolution in pixels of the Hough grid
+        #   theta = np.pi/180 # angular resolution in radians of the Hough grid
+        #   threshold = 15     # minimum number of votes (intersections in Hough grid cell)
+        #   min_line_length = 30 #minimum number of pixels making up a line
+        #   max_line_gap = 20    # maximum gap in pixels between connectable line segments
+        #
+        # My values determined by trial and error
+        rho = 2 # distance resolution in pixels of the Hough grid
+        theta = np.pi/180 # angular resolution in radians of the Hough grid
+        threshold = 15     # minimum number of votes (intersections in Hough grid cell)
+        min_line_length = 10 #minimum number of pixels making up a line
+        max_line_gap = 10    # maximum gap in pixels between connectable line segments
+        houghed_img = hough_lines(masked_canny, rho, theta, threshold, min_line_length, max_line_gap)
+    
+        #plt.subplot(subplot_rows, subplot_cols,index+(subplot_cols*3)+1)
+        #plt.imshow(houghed_img)
+        #imshow_full_size(houghed_img)
+    
+        # Create a "color" binary image to combine with line image
+        color_edges = np.dstack((edges, edges, edges)) 
+    
+        # Draw the lines on the edge image
+        lines_edges = cv2.addWeighted(color_edges, 0.8, houghed_img, 1, 0) 
+        plt.subplot(subplot_rows, subplot_cols,index+(subplot_cols*2)+1)
+        plt.imshow(lines_edges)
+        #imshow_full_size(lines_edges)
+    
+    plt.subplots_adjust(left=0.0, bottom=0, right=1, top=1,
+                    wspace=0.02, hspace=0.02)
+    plt.show()
+
+def hough_loop(gray, bounding_shape):
+    kernel = 5
+    blur_gray = gaussian_blur(gray, kernel)
+
     # Define our parameters for Canny and apply
     low_threshold = 50
     high_threshold = 150
     edges = canny(blur_gray, low_threshold, high_threshold)
-
-    #plt.subplot(subplot_rows, subplot_cols,index+(subplot_cols*1)+1)
-    #plt.imshow(edges, cmap='gray')
-    #imshow_full_size(edges, cmap='gray')
-    #imshow_full_size(edges, cmap='Greys_r') # Udacity quiz uses Greys_r
-
     masked_canny = region_of_interest(edges, bounding_shape)
-    plt.subplot(subplot_rows, subplot_cols,index+(subplot_cols*1)+1)
+
+    plt.figure()
+
+    subplot_rows = 2
+    params = [5,7,10,12,15]
+    subplot_cols = 3
+    subplot_index = 1
+
+    plt.subplot(subplot_rows, subplot_cols, subplot_index)
+    subplot_index = subplot_index + 1
     plt.imshow(masked_canny, cmap='gray')
-    #imshow_full_size(masked_canny, cmap='gray')
 
     # Define the Hough transform parameters
     rho = 2 # distance resolution in pixels of the Hough grid
     theta = np.pi/180 # angular resolution in radians of the Hough grid
     threshold = 15     # minimum number of votes (intersections in Hough grid cell)
-    min_line_length = 40 #minimum number of pixels making up a line
-    max_line_gap = 20    # maximum gap in pixels between connectable line segments
-    houghed_img = hough_lines(masked_canny, rho, theta, threshold, min_line_length, max_line_gap)
-
-    #plt.subplot(subplot_rows, subplot_cols,index+(subplot_cols*3)+1)
-    #plt.imshow(houghed_img)
-    #imshow_full_size(houghed_img)
+    min_line_length = 10 #minimum number of pixels making up a line
+    max_line_gap = 10    # maximum gap in pixels between connectable line segments
 
     # Create a "color" binary image to combine with line image
     color_edges = np.dstack((edges, edges, edges)) 
 
+    for index, value in enumerate(params):
+        houghed_img = hough_lines(masked_canny, rho, theta, threshold, min_line_length, max_line_gap)
+
+        # Draw the lines on the edge image
+        lines_edges = cv2.addWeighted(color_edges, 0.8, houghed_img, 1, 0) 
+        plt.subplot(subplot_rows, subplot_cols, subplot_index)
+        subplot_index = subplot_index + 1
+        plt.imshow(lines_edges)
+        plt.title(value)
+
+    plt.subplots_adjust(left=0.0, bottom=0, right=1, top=1,
+                    wspace=0.02, hspace=0.02)
+    plt.show()
+
+#main_loop()
+
+import os
+
+def find_lanes_in_file(filename):
+    image = mpimg.imread(filename)
+    height, width, depth = image.shape
+
+    print('This image is:', type(image), 'with dimensions:', image.shape)
+    imshow_full_size(image, title=filename)
+
+    # To show multiple images, call plt.figure() start a new figure.
+    # Subsequent calls to plt.imshow() will appear in a new window.
+
+    # Convert to grayscale
+    gray = cv2.cvtColor(image,cv2.COLOR_RGB2GRAY)
+
+    imshow_full_size(gray, cmap='gray')
+
+    top_of_mask = 310
+    lower_left  = (140, height-1)
+    upper_left  = (475, top_of_mask)
+    upper_right = (500, top_of_mask)
+    lower_right = (860, height-1)
+
+    bounding_shape = np.array([[lower_left, upper_left, upper_right, lower_right]], dtype=np.int32)
+    masked_gray = region_of_interest(gray, bounding_shape)
+    imshow_full_size(masked_gray, cmap='gray')
+
+    kernel = 5
+    blur_gray = gaussian_blur(gray, kernel)
+
+    # Define our parameters for Canny and apply
+    low_threshold = 50
+    high_threshold = 150
+    edges = canny(blur_gray, low_threshold, high_threshold)
+    masked_canny = region_of_interest(edges, bounding_shape)
+    imshow_full_size(masked_canny, cmap='gray')
+
+    # Define the Hough transform parameters
+    rho = 2 # distance resolution in pixels of the Hough grid
+    theta = np.pi/180 # angular resolution in radians of the Hough grid
+    threshold = 15     # minimum number of votes (intersections in Hough grid cell)
+    min_line_length = 10 #minimum number of pixels making up a line
+    max_line_gap = 10    # maximum gap in pixels between connectable line segments
+
+    # Create a "color" binary image to combine with line image
+    color_edges = np.dstack((edges, edges, edges)) 
+
+    houghed_img = hough_lines(masked_canny, rho, theta, threshold, min_line_length, max_line_gap)
+    imshow_full_size(houghed_img, cmap='gray')
+
     # Draw the lines on the edge image
     lines_edges = cv2.addWeighted(color_edges, 0.8, houghed_img, 1, 0) 
-    plt.subplot(subplot_rows, subplot_cols,index+(subplot_cols*2)+1)
-    plt.imshow(lines_edges)
-    #imshow_full_size(lines_edges)
+    imshow_full_size(lines_edges, cmap='gray')
 
-plt.subplots_adjust(left=0.0, bottom=0, right=1, top=1,
-                wspace=0.02, hspace=0.0)
-plt.show()
+    #plt.subplots_adjust(left=0.0, bottom=0, right=1, top=1,
+                    #wspace=0.02, hspace=0.02)
+    #plt.show()
+
+def file_loop():
+    dir_name = "test_images"
+    image_files = [f for f in os.listdir(dir_name) if os.path.isfile(os.path.join(dir_name, f))]
+    image_files = [os.path.join(dir_name, f) for f in image_files]
+    print(image_files)
+
+    for filename in image_files:
+        find_lanes_in_file(filename)
+
+file_loop()
