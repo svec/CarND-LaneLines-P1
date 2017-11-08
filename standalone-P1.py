@@ -55,6 +55,18 @@ def region_of_interest(img, vertices):
     masked_image = cv2.bitwise_and(img, mask)
     return masked_image
 
+def line_fit(x1,y1,x2,y2):
+    rise = y2 - y1
+    run  = x2 - x1
+
+    # Intentionally ignoring ZeroDivisionError for now
+    slope = rise / run
+
+    # y = mx + b
+    # b = y - mx
+    y_intercept = y1 - (slope * x1)
+
+    return (slope, y_intercept)
 
 def draw_lines(img, lines, color=[255, 0, 0], thickness=2):
     """
@@ -73,9 +85,22 @@ def draw_lines(img, lines, color=[255, 0, 0], thickness=2):
     If you want to make the lines semi-transparent, think about combining
     this function with the weighted_img() function below
     """
-    for line in lines:
+    print("drawing %d lines" % (len(lines)))
+
+    stop_at = 100
+
+    for index, line in enumerate(lines):
+        print("line #", index)
         for x1,y1,x2,y2 in line:
+            slope, y_intercept = line_fit(x1,y1,x2,y2)
+            line_len = math.sqrt((x2 - x1)**2 + (y2 - y1)**2)
+
+            print("(%d, %d) (%d, %d) len: %5.2f slope: %5.2f y_int: %5.2f" % (x1, y1, x2, y2, line_len, slope, y_intercept))
             cv2.line(img, (x1, y1), (x2, y2), color, thickness)
+            if index >= stop_at:
+                break
+        if index >= stop_at:
+            break
 
 def hough_lines(img, rho, theta, threshold, min_line_len, max_line_gap):
     """
@@ -284,6 +309,9 @@ def file_loop():
     image_files = [f for f in os.listdir(input_dir_name) if os.path.isfile(os.path.join(input_dir_name, f))]
     image_files = [os.path.join(input_dir_name, f) for f in image_files]
     print(image_files)
+
+    find_lanes_in_file("test_images/solidWhiteRight.jpg", "test_images_output")
+    return
 
     for filename in image_files:
         find_lanes_in_file(filename, "test_images_output")
