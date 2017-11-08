@@ -264,69 +264,20 @@ def find_lanes_in_file(filename, output_dir_name):
     height, width, depth = image.shape
 
     base_filename, file_ext = os.path.splitext(os.path.basename(filename))
-    output_filename_no_suffix = os.path.join(output_dir_name, base_filename)
+    output_filename_no_ext = os.path.join(output_dir_name, base_filename)
 
-    print("#", base_filename, "#", file_ext, "#", output_filename_no_suffix, "#")
+    print("#", base_filename, "#", file_ext, "#", output_filename_no_ext, "#")
 
-    print('This image is:', type(image), 'with dimensions:', image.shape)
-    #imshow_full_size(image, title=filename)
-    mpimg.imsave(output_filename_no_suffix + "-0-orig" + file_ext, image)
+    global g_debug_frame
+    global g_debug_output_filename_no_ext
+    global g_debug_frame_count
 
-    # To show multiple images, call plt.figure() start a new figure.
-    # Subsequent calls to plt.imshow() will appear in a new window.
+    g_debug_frame = True
+    g_debug_output_filename_no_ext = output_filename_no_ext
+    g_debug_frame_count = ""
 
-    # Convert to grayscale
-    gray = cv2.cvtColor(image,cv2.COLOR_RGB2GRAY)
+    process_image(image)
 
-    #imshow_full_size(gray, cmap='gray')
-    mpimg.imsave(output_filename_no_suffix + "-1-gray" + file_ext, gray, cmap='gray')
-
-    top_of_mask = 310
-    lower_left  = (140, height-1)
-    upper_left  = (475, top_of_mask)
-    upper_right = (500, top_of_mask)
-    lower_right = (900, height-1)
-
-    bounding_shape = np.array([[lower_left, upper_left, upper_right, lower_right]], dtype=np.int32)
-    masked_gray = region_of_interest(gray, bounding_shape)
-    #imshow_full_size(masked_gray, cmap='gray')
-    mpimg.imsave(output_filename_no_suffix + "-2-gray-masked" + file_ext, masked_gray, cmap='gray')
-
-    kernel = 5
-    blur_gray = gaussian_blur(gray, kernel)
-
-    # Define our parameters for Canny and apply
-    low_threshold = 50
-    high_threshold = 150
-    edges = canny(blur_gray, low_threshold, high_threshold)
-    masked_canny = region_of_interest(edges, bounding_shape)
-    #imshow_full_size(masked_canny, cmap='gray')
-    mpimg.imsave(output_filename_no_suffix + "-3-canny" + file_ext, masked_canny, cmap='gray')
-
-    # Define the Hough transform parameters
-    rho = 2 # distance resolution in pixels of the Hough grid
-    theta = np.pi/180 # angular resolution in radians of the Hough grid
-    threshold = 15     # minimum number of votes (intersections in Hough grid cell)
-    min_line_length = 10 #minimum number of pixels making up a line
-    max_line_gap = 10    # maximum gap in pixels between connectable line segments
-
-    # Create a "color" binary image to combine with line image
-    color_edges = np.dstack((edges, edges, edges)) 
-
-    houghed_img = hough_lines(masked_canny, rho, theta, threshold, min_line_length, max_line_gap)
-    #imshow_full_size(houghed_img, cmap='gray')
-    mpimg.imsave(output_filename_no_suffix + "-4-hough" + file_ext, houghed_img)
-
-    # Draw the lines on the edge image
-    #lines_edges = cv2.addWeighted(color_edges, 0.8, houghed_img, 1, 0) 
-    #imshow_full_size(lines_edges, cmap='gray')
-    lines_edges = cv2.addWeighted(image, 0.8, houghed_img, 1, 0) 
-    #imshow_full_size(lines_edges);
-    mpimg.imsave(output_filename_no_suffix + "-5-final" + file_ext, lines_edges);
-
-    #plt.subplots_adjust(left=0.0, bottom=0, right=1, top=1,
-                    #wspace=0.02, hspace=0.02)
-    #plt.show()
 
 def file_loop():
     input_dir_name = "test_images"
@@ -337,23 +288,42 @@ def file_loop():
     for filename in image_files:
         find_lanes_in_file(filename, "test_images_output")
 
+g_debug_frame = False
+g_debug_output_filename_no_ext = ""
+g_debug_frame_count = ""
+
 def process_image(image):
     # NOTE: The output you return should be a color image (3 channel) for processing video below
     # TODO: put your pipeline here,
     # you should return the final output (image where lines are drawn on lanes)
     height, width, depth = image.shape
 
+    output_file_prefix = "FIXME"
+
+    global g_debug_frame
+    global g_debug_frame_count
+    if g_debug_frame:
+        output_file_prefix = g_debug_output_filename_no_ext
+        if g_debug_frame_count != "":
+            output_file_prefix = output_file_prefix + "-" + str(g_debug_frame_count)
+        mpimg.imsave(output_file_prefix + "-0-orig.jpg", image)
     # Convert to grayscale
     gray = cv2.cvtColor(image,cv2.COLOR_RGB2GRAY)
 
+    if g_debug_frame:
+        mpimg.imsave(output_file_prefix + "-1-gray.jpg", gray, cmap='gray')
+
     top_of_mask = 317
     lower_left  = (140, height-1)
-    upper_left  = (475, top_of_mask)
+    upper_left  = (450, top_of_mask)
     upper_right = (500, top_of_mask)
     lower_right = (900, height-1)
 
     bounding_shape = np.array([[lower_left, upper_left, upper_right, lower_right]], dtype=np.int32)
     masked_gray = region_of_interest(gray, bounding_shape)
+
+    if g_debug_frame:
+        mpimg.imsave(output_file_prefix + "-2-gray-masked.jpg", masked_gray, cmap='gray')
 
     kernel = 5
     blur_gray = gaussian_blur(gray, kernel)
@@ -364,6 +334,9 @@ def process_image(image):
     edges = canny(blur_gray, low_threshold, high_threshold)
     masked_canny = region_of_interest(edges, bounding_shape)
 
+    if g_debug_frame:
+        mpimg.imsave(output_file_prefix + "-3-canny.jpg", masked_canny, cmap='gray')
+
     # Define the Hough transform parameters
     rho = 2 # distance resolution in pixels of the Hough grid
     theta = np.pi/180 # angular resolution in radians of the Hough grid
@@ -373,23 +346,43 @@ def process_image(image):
 
     houghed_img = hough_lines(masked_canny, rho, theta, threshold, min_line_length, max_line_gap)
 
+    if g_debug_frame:
+        mpimg.imsave(output_file_prefix + "-4-hough.jpg", houghed_img)
+
     # Draw the lines on the original image
     lines_edges = cv2.addWeighted(image, 0.8, houghed_img, 1, 0) 
 
+    if g_debug_frame:
+        if g_debug_frame_count != "":
+            g_debug_frame_count = g_debug_frame_count + 1
+        mpimg.imsave(output_file_prefix + "-5-final.jpg", lines_edges)
+        g_debug_frame = False
+
     return lines_edges
 
-def movie(filename, output_dir_name):
+def movie(filename, output_dir_name, debug=False):
 
     base_filename, file_ext = os.path.splitext(os.path.basename(filename))
-    output_filename_no_suffix = os.path.join(output_dir_name, base_filename)
-    print("#", base_filename, "#", file_ext, "#", output_filename_no_suffix, "#")
+    output_filename_no_ext = os.path.join(output_dir_name, base_filename)
+    print("#", base_filename, "#", file_ext, "#", output_filename_no_ext, "#")
 
-    output = output_filename_no_suffix + file_ext # 'test_videos_output/solidWhiteRight.mp4'
+    output = output_filename_no_ext + file_ext
+
+    global g_debug_frame
+    global g_debug_output_filename_no_ext
+    global g_debug_frame_count
+    g_debug_frame = False
+
+    if debug:
+        g_debug_frame = True
+        g_debug_output_filename_no_ext = output_filename_no_ext
+        g_debug_frame_count = 0
+
     ## To speed up the testing process you may want to try your pipeline on a shorter subclip of the video
     ## To do so add .subclip(start_second,end_second) to the end of the line below
     ## Where start_second and end_second are integer values representing the start and end of the subclip
     ## You may also uncomment the following line for a subclip of the first 5 seconds
-    #clip = VideoFileClip("test_videos/solidWhiteRight.mp4").subclip(0,5)
+    #clip = VideoFileClip(filename).subclip(0,1)
     clip = VideoFileClip(filename)
     processed_clip = clip.fl_image(process_image) #NOTE: this function expects color images!!
     processed_clip.write_videofile(output, audio=False)
@@ -405,10 +398,10 @@ def movies_loop():
     print(video_files)
 
     for filename in video_files:
-        movie(filename, "test_videos_output")
+        movie(filename, "test_videos_output", debug=False)
 
 #main_loop()
 #kernels_loop()
-#file_loop()
-movies_loop()
+file_loop()
+#movies_loop()
 
