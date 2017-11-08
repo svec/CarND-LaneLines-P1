@@ -257,12 +257,18 @@ def hough_loop(gray, bounding_shape):
 
 import os
 
-def find_lanes_in_file(filename):
+def find_lanes_in_file(filename, output_dir_name):
     image = mpimg.imread(filename)
     height, width, depth = image.shape
 
+    base_filename, file_ext = os.path.splitext(os.path.basename(filename))
+    output_filename_no_suffix = os.path.join(output_dir_name, base_filename)
+
+    print("#", base_filename, "#", file_ext, "#", output_filename_no_suffix, "#")
+
     print('This image is:', type(image), 'with dimensions:', image.shape)
-    imshow_full_size(image, title=filename)
+    #imshow_full_size(image, title=filename)
+    mpimg.imsave(output_filename_no_suffix + "-0-orig" + file_ext, image)
 
     # To show multiple images, call plt.figure() start a new figure.
     # Subsequent calls to plt.imshow() will appear in a new window.
@@ -270,17 +276,19 @@ def find_lanes_in_file(filename):
     # Convert to grayscale
     gray = cv2.cvtColor(image,cv2.COLOR_RGB2GRAY)
 
-    imshow_full_size(gray, cmap='gray')
+    #imshow_full_size(gray, cmap='gray')
+    mpimg.imsave(output_filename_no_suffix + "-1-gray" + file_ext, gray, cmap='gray')
 
     top_of_mask = 310
     lower_left  = (140, height-1)
     upper_left  = (475, top_of_mask)
     upper_right = (500, top_of_mask)
-    lower_right = (860, height-1)
+    lower_right = (900, height-1)
 
     bounding_shape = np.array([[lower_left, upper_left, upper_right, lower_right]], dtype=np.int32)
     masked_gray = region_of_interest(gray, bounding_shape)
-    imshow_full_size(masked_gray, cmap='gray')
+    #imshow_full_size(masked_gray, cmap='gray')
+    mpimg.imsave(output_filename_no_suffix + "-2-gray-masked" + file_ext, masked_gray, cmap='gray')
 
     kernel = 5
     blur_gray = gaussian_blur(gray, kernel)
@@ -290,7 +298,8 @@ def find_lanes_in_file(filename):
     high_threshold = 150
     edges = canny(blur_gray, low_threshold, high_threshold)
     masked_canny = region_of_interest(edges, bounding_shape)
-    imshow_full_size(masked_canny, cmap='gray')
+    #imshow_full_size(masked_canny, cmap='gray')
+    mpimg.imsave(output_filename_no_suffix + "-3-canny" + file_ext, masked_canny, cmap='gray')
 
     # Define the Hough transform parameters
     rho = 2 # distance resolution in pixels of the Hough grid
@@ -303,25 +312,27 @@ def find_lanes_in_file(filename):
     color_edges = np.dstack((edges, edges, edges)) 
 
     houghed_img = hough_lines(masked_canny, rho, theta, threshold, min_line_length, max_line_gap)
-    imshow_full_size(houghed_img, cmap='gray')
+    #imshow_full_size(houghed_img, cmap='gray')
+    mpimg.imsave(output_filename_no_suffix + "-4-hough" + file_ext, houghed_img, cmap='gray')
 
     # Draw the lines on the edge image
     #lines_edges = cv2.addWeighted(color_edges, 0.8, houghed_img, 1, 0) 
     #imshow_full_size(lines_edges, cmap='gray')
     lines_edges = cv2.addWeighted(image, 0.8, houghed_img, 1, 0) 
-    imshow_full_size(lines_edges);
+    #imshow_full_size(lines_edges);
+    mpimg.imsave(output_filename_no_suffix + "-5-final" + file_ext, lines_edges);
 
     #plt.subplots_adjust(left=0.0, bottom=0, right=1, top=1,
                     #wspace=0.02, hspace=0.02)
     #plt.show()
 
 def file_loop():
-    dir_name = "test_images"
-    image_files = [f for f in os.listdir(dir_name) if os.path.isfile(os.path.join(dir_name, f))]
-    image_files = [os.path.join(dir_name, f) for f in image_files]
+    input_dir_name = "test_images"
+    image_files = [f for f in os.listdir(input_dir_name) if os.path.isfile(os.path.join(input_dir_name, f))]
+    image_files = [os.path.join(input_dir_name, f) for f in image_files]
     print(image_files)
 
     for filename in image_files:
-        find_lanes_in_file(filename)
+        find_lanes_in_file(filename, "test_images_output")
 
 file_loop()
