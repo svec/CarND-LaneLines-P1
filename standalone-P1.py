@@ -9,6 +9,10 @@ import cv2
 
 import math
 
+# Import everything needed to edit/save/watch video clips
+from moviepy.editor import VideoFileClip
+from IPython.display import HTML
+
 def grayscale(img):
     """Applies the Grayscale transform
     This will return an image with only one color channel
@@ -81,7 +85,7 @@ def hough_lines(img, rho, theta, threshold, min_line_len, max_line_gap):
     """
     lines = cv2.HoughLinesP(img, rho, theta, threshold, np.array([]), minLineLength=min_line_len, maxLineGap=max_line_gap)
     line_img = np.zeros((img.shape[0], img.shape[1], 3), dtype=np.uint8)
-    draw_lines(line_img, lines)
+    draw_lines(line_img, lines, color=[255,0,0], thickness=4)
     return line_img
 
 # Python 3 has support for cool math symbols.
@@ -253,8 +257,6 @@ def hough_loop(gray, bounding_shape):
                     wspace=0.02, hspace=0.02)
     plt.show()
 
-#main_loop()
-
 import os
 
 def find_lanes_in_file(filename, output_dir_name):
@@ -313,7 +315,7 @@ def find_lanes_in_file(filename, output_dir_name):
 
     houghed_img = hough_lines(masked_canny, rho, theta, threshold, min_line_length, max_line_gap)
     #imshow_full_size(houghed_img, cmap='gray')
-    mpimg.imsave(output_filename_no_suffix + "-4-hough" + file_ext, houghed_img, cmap='gray')
+    mpimg.imsave(output_filename_no_suffix + "-4-hough" + file_ext, houghed_img)
 
     # Draw the lines on the edge image
     #lines_edges = cv2.addWeighted(color_edges, 0.8, houghed_img, 1, 0) 
@@ -335,4 +337,78 @@ def file_loop():
     for filename in image_files:
         find_lanes_in_file(filename, "test_images_output")
 
-file_loop()
+def process_image(image):
+    # NOTE: The output you return should be a color image (3 channel) for processing video below
+    # TODO: put your pipeline here,
+    # you should return the final output (image where lines are drawn on lanes)
+    height, width, depth = image.shape
+
+    # Convert to grayscale
+    gray = cv2.cvtColor(image,cv2.COLOR_RGB2GRAY)
+
+    top_of_mask = 317
+    lower_left  = (140, height-1)
+    upper_left  = (475, top_of_mask)
+    upper_right = (500, top_of_mask)
+    lower_right = (900, height-1)
+
+    bounding_shape = np.array([[lower_left, upper_left, upper_right, lower_right]], dtype=np.int32)
+    masked_gray = region_of_interest(gray, bounding_shape)
+
+    kernel = 5
+    blur_gray = gaussian_blur(gray, kernel)
+
+    # Define our parameters for Canny and apply
+    low_threshold = 50
+    high_threshold = 150
+    edges = canny(blur_gray, low_threshold, high_threshold)
+    masked_canny = region_of_interest(edges, bounding_shape)
+
+    # Define the Hough transform parameters
+    rho = 2 # distance resolution in pixels of the Hough grid
+    theta = np.pi/180 # angular resolution in radians of the Hough grid
+    threshold = 15     # minimum number of votes (intersections in Hough grid cell)
+    min_line_length = 10 #minimum number of pixels making up a line
+    max_line_gap = 10    # maximum gap in pixels between connectable line segments
+
+    houghed_img = hough_lines(masked_canny, rho, theta, threshold, min_line_length, max_line_gap)
+
+    # Draw the lines on the original image
+    lines_edges = cv2.addWeighted(image, 0.8, houghed_img, 1, 0) 
+
+    return lines_edges
+
+def movie(filename, output_dir_name):
+
+    base_filename, file_ext = os.path.splitext(os.path.basename(filename))
+    output_filename_no_suffix = os.path.join(output_dir_name, base_filename)
+    print("#", base_filename, "#", file_ext, "#", output_filename_no_suffix, "#")
+
+    output = output_filename_no_suffix + file_ext # 'test_videos_output/solidWhiteRight.mp4'
+    ## To speed up the testing process you may want to try your pipeline on a shorter subclip of the video
+    ## To do so add .subclip(start_second,end_second) to the end of the line below
+    ## Where start_second and end_second are integer values representing the start and end of the subclip
+    ## You may also uncomment the following line for a subclip of the first 5 seconds
+    #clip = VideoFileClip("test_videos/solidWhiteRight.mp4").subclip(0,5)
+    clip = VideoFileClip(filename)
+    processed_clip = clip.fl_image(process_image) #NOTE: this function expects color images!!
+    processed_clip.write_videofile(output, audio=False)
+
+def movies_loop():
+    input_dir_name = "test_videos"
+    video_files = [f for f in os.listdir(input_dir_name) if os.path.isfile(os.path.join(input_dir_name, f))]
+    video_files = [
+                   "test_videos/solidWhiteRight.mp4",
+                   "test_videos/solidYellowLeft.mp4",
+                   "test_videos/challenge.mp4",
+    ]
+    print(video_files)
+
+    for filename in video_files:
+        movie(filename, "test_videos_output")
+
+#main_loop()
+#kernels_loop()
+#file_loop()
+movies_loop()
+
