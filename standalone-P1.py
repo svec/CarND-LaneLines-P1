@@ -69,7 +69,7 @@ def line_fit(x1,y1,x2,y2):
 
     return (slope, y_intercept)
 
-def draw_lines(img, lines, color=[255, 0, 0], thickness=2):
+def draw_lines(img, lines, color=[255, 0, 0], thickness=2, single_line=False):
     """
     NOTE: this is the function you might want to use as a starting point once you want to 
     average/extrapolate the line segments you detect to map out the full
@@ -87,6 +87,7 @@ def draw_lines(img, lines, color=[255, 0, 0], thickness=2):
     this function with the weighted_img() function below
     """
     #print("drawing %d lines" % (len(lines)))
+    height, width, depth = img.shape
 
     stop_at = 100
 
@@ -105,7 +106,8 @@ def draw_lines(img, lines, color=[255, 0, 0], thickness=2):
             list_slopes.append(slope)
             list_yints.append(y_intercept)
 
-            cv2.line(img, (x1, y1), (x2, y2), color, thickness)
+            if single_line == False:
+                cv2.line(img, (x1, y1), (x2, y2), color, thickness)
 
             #if index >= stop_at:
                 #break
@@ -144,6 +146,23 @@ def draw_lines(img, lines, color=[255, 0, 0], thickness=2):
     plt.axvline(x=left_y_int_mean, linewidth=4, color='r')
     plt.axvline(x=right_y_int_mean, linewidth=4, color='k')
 
+    if single_line:
+        color = [0, 255, 0]
+        # We now have the slope and y-intercept of the 2 lines we want to draw.
+        x1 = 0
+        y1 = int(round(left_y_int_mean))
+        y2 = 0
+        x2 = int(round((y2 - y1) / left_mean))
+        cv2.line(img, (x1, y1), (x2, y2), color, thickness)
+
+        x1 = 0
+        y1 = int(round(right_y_int_mean))
+        y2 = height-1
+        x2 = int(round((y2 - y1) / right_mean))
+        cv2.line(img, (x1, y1), (x2, y2), color, thickness)
+
+
+
     plt.subplot(3,1,3)
     plt.hist(list_lengths, nbins)
     plt.title('lengths')
@@ -154,7 +173,7 @@ def draw_lines(img, lines, color=[255, 0, 0], thickness=2):
     if g_debug_frame:
         plt.savefig(g_debug_output_filename_no_ext + "-4-lines.jpg")
     
-def hough_lines(img, rho, theta, threshold, min_line_len, max_line_gap):
+def hough_lines(img, rho, theta, threshold, min_line_len, max_line_gap, single_line=False):
     """
     `img` should be the output of a Canny transform.
         
@@ -162,7 +181,7 @@ def hough_lines(img, rho, theta, threshold, min_line_len, max_line_gap):
     """
     lines = cv2.HoughLinesP(img, rho, theta, threshold, np.array([]), minLineLength=min_line_len, maxLineGap=max_line_gap)
     line_img = np.zeros((img.shape[0], img.shape[1], 3), dtype=np.uint8)
-    draw_lines(line_img, lines, color=[255,0,0], thickness=4)
+    draw_lines(line_img, lines, color=[255,0,0], thickness=4, single_line=single_line)
     return line_img
 
 # Python 3 has support for cool math symbols.
@@ -424,10 +443,15 @@ def process_image(image):
     min_line_length = 10 #minimum number of pixels making up a line
     max_line_gap = 10    # maximum gap in pixels between connectable line segments
 
-    houghed_img = hough_lines(masked_canny, rho, theta, threshold, min_line_length, max_line_gap)
+    houghed_img = hough_lines(masked_canny, rho, theta, threshold, min_line_length, max_line_gap, single_line=False)
 
     if g_debug_frame:
         mpimg.imsave(output_file_prefix + "-4-hough.jpg", houghed_img)
+
+    houghed_img = hough_lines(masked_canny, rho, theta, threshold, min_line_length, max_line_gap, single_line=True)
+
+    if g_debug_frame:
+        mpimg.imsave(output_file_prefix + "-4-hough-oneline.jpg", houghed_img)
 
     # Draw the lines on the original image
     lines_edges = cv2.addWeighted(image, 0.8, houghed_img, 1, 0) 
