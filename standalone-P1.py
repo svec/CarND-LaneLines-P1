@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 import numpy as np
 import cv2
+import statistics
 #%matplotlib inline
 
 import math
@@ -85,23 +86,74 @@ def draw_lines(img, lines, color=[255, 0, 0], thickness=2):
     If you want to make the lines semi-transparent, think about combining
     this function with the weighted_img() function below
     """
-    print("drawing %d lines" % (len(lines)))
+    #print("drawing %d lines" % (len(lines)))
 
     stop_at = 100
 
+    list_lengths = []
+    list_slopes = []
+    list_yints = []
+
     for index, line in enumerate(lines):
-        print("line #", index)
+        #print("line #", index)
         for x1,y1,x2,y2 in line:
             slope, y_intercept = line_fit(x1,y1,x2,y2)
             line_len = math.sqrt((x2 - x1)**2 + (y2 - y1)**2)
 
-            print("(%d, %d) (%d, %d) len: %5.2f slope: %5.2f y_int: %5.2f" % (x1, y1, x2, y2, line_len, slope, y_intercept))
-            cv2.line(img, (x1, y1), (x2, y2), color, thickness)
-            if index >= stop_at:
-                break
-        if index >= stop_at:
-            break
+            #print("(%d, %d) (%d, %d) len: %5.2f slope: %5.2f y_int: %5.2f" % (x1, y1, x2, y2, line_len, slope, y_intercept))
+            list_lengths.append(line_len)
+            list_slopes.append(slope)
+            list_yints.append(y_intercept)
 
+            cv2.line(img, (x1, y1), (x2, y2), color, thickness)
+
+            #if index >= stop_at:
+                #break
+        #if index >= stop_at:
+            #break
+
+    nbins = 100
+
+    plt.figure()
+    plt.subplot(3,1,1)
+    plt.hist(list_slopes, nbins)
+    plt.title('slopes')
+    plt.grid()
+
+    left_index_slopes =  [(index, value) for index, value in enumerate(list_slopes) if ((value > -0.8) and (value < -0.5))]
+    right_index_slopes = [(index, value) for index, value in enumerate(list_slopes) if ((value >  0.5) and (value < 0.7))]
+
+    left_indices,  left_slopes  = zip(*left_index_slopes)
+    right_indices, right_slopes = zip(*right_index_slopes)
+    left_mean  = statistics.mean(left_slopes)
+    right_mean = statistics.mean(right_slopes)
+
+    left_y_ints = [list_yints[i] for i in left_indices]
+    left_y_int_mean = statistics.mean(left_y_ints)
+    right_y_ints = [list_yints[i] for i in right_indices]
+    right_y_int_mean = statistics.mean(right_y_ints)
+
+    plt.axvline(x=left_mean, linewidth=4, color='r')
+    plt.axvline(x=right_mean, linewidth=4, color='k')
+
+    plt.subplot(3,1,2)
+    plt.hist(list_yints, nbins)
+    plt.title('yints')
+    plt.grid()
+
+    plt.axvline(x=left_y_int_mean, linewidth=4, color='r')
+    plt.axvline(x=right_y_int_mean, linewidth=4, color='k')
+
+    plt.subplot(3,1,3)
+    plt.hist(list_lengths, nbins)
+    plt.title('lengths')
+    plt.grid()
+
+    global g_debug_frame
+    global g_debug_output_filename_no_ext
+    if g_debug_frame:
+        plt.savefig(g_debug_output_filename_no_ext + "-4-lines.jpg")
+    
 def hough_lines(img, rho, theta, threshold, min_line_len, max_line_gap):
     """
     `img` should be the output of a Canny transform.
@@ -310,8 +362,8 @@ def file_loop():
     image_files = [os.path.join(input_dir_name, f) for f in image_files]
     print(image_files)
 
-    find_lanes_in_file("test_images/solidWhiteRight.jpg", "test_images_output")
-    return
+    #find_lanes_in_file("test_images/solidWhiteRight.jpg", "test_images_output")
+    #return
 
     for filename in image_files:
         find_lanes_in_file(filename, "test_images_output")
