@@ -14,6 +14,8 @@ import math
 from moviepy.editor import VideoFileClip
 from IPython.display import HTML
 
+g_top_of_mask = 0
+
 def grayscale(img):
     """Applies the Grayscale transform
     This will return an image with only one color channel
@@ -60,8 +62,9 @@ def line_fit(x1,y1,x2,y2):
     rise = y2 - y1
     run  = x2 - x1
 
-    # Intentionally ignoring ZeroDivisionError for now
-    slope = rise / run
+    slope = -100
+    if run != 0:
+        slope = rise / run
 
     # y = mx + b
     # b = y - mx
@@ -114,16 +117,56 @@ def draw_lines(img, lines, color=[255, 0, 0], thickness=2, single_line=False):
         #if index >= stop_at:
             #break
 
-    nbins = 100
+    if single_line == False:
+        return
 
-    plt.figure()
-    plt.subplot(3,1,1)
-    plt.hist(list_slopes, nbins)
-    plt.title('slopes')
-    plt.grid()
 
-    left_index_slopes =  [(index, value) for index, value in enumerate(list_slopes) if ((value > -0.8) and (value < -0.5))]
+    global g_debug_frame
+    global g_debug_output_filename_no_ext
+    global g_debug_frame_count
+    if g_debug_frame:
+        output_file_prefix = g_debug_output_filename_no_ext
+        if g_debug_frame_count != "":
+            output_file_prefix = output_file_prefix + "-" + str(g_debug_frame_count)
+
+        nbins = 100
+
+        plt.figure()
+        plt.subplot(3,1,1)
+        plt.hist(list_slopes, nbins, range=(-0.1, 2))
+        plt.title('slopes')
+        plt.grid()
+
+        plt.subplot(3,1,2)
+        plt.hist(list_yints, nbins)
+        plt.title('yints')
+        plt.grid()
+        
+        plt.subplot(3,1,3)
+        plt.hist(list_lengths, nbins)
+        plt.title('lengths')
+        plt.grid()
+        
+
+
+    left_index_slopes =  [(index, value) for index, value in enumerate(list_slopes) if ((value > -0.9) and (value < -0.5))]
     right_index_slopes = [(index, value) for index, value in enumerate(list_slopes) if ((value >  0.5) and (value < 0.7))]
+
+    if (len(left_index_slopes) < 2) or (len(right_index_slopes) < 2):
+        cv2.putText(img, "ERROR FINDING LANES", (100, 100), cv2.FONT_HERSHEY_SIMPLEX, 2, 255, thickness=3)
+
+        if (len(left_index_slopes) < 2): 
+            print("ERROR: left_index_slopes too small ")
+        if (len(right_index_slopes) < 2): 
+            print("ERROR: right_index_slopes too small ")
+        print("ERROR: list_lengths:" , list_lengths)
+        print("ERROR: list_slopes:" , list_slopes)
+        print("ERROR: list_yints:" , list_yints)
+        if g_debug_frame:
+            plt.savefig(output_file_prefix + "-4-lines-ERROR.jpg")
+
+                
+        return
 
     left_indices,  left_slopes  = zip(*left_index_slopes)
     right_indices, right_slopes = zip(*right_index_slopes)
@@ -135,43 +178,51 @@ def draw_lines(img, lines, color=[255, 0, 0], thickness=2, single_line=False):
     right_y_ints = [list_yints[i] for i in right_indices]
     right_y_int_mean = statistics.mean(right_y_ints)
 
-    plt.axvline(x=left_mean, linewidth=4, color='r')
-    plt.axvline(x=right_mean, linewidth=4, color='k')
+    if g_debug_frame:
+        plt.subplot(3,1,1)
 
-    plt.subplot(3,1,2)
-    plt.hist(list_yints, nbins)
-    plt.title('yints')
-    plt.grid()
+        plt.axvline(x=left_mean, linewidth=1, color='r')
+        plt.axvline(x=right_mean, linewidth=1, color='k')
 
-    plt.axvline(x=left_y_int_mean, linewidth=4, color='r')
-    plt.axvline(x=right_y_int_mean, linewidth=4, color='k')
+        plt.subplot(3,1,2)
+        
+        plt.axvline(x=left_y_int_mean, linewidth=1, color='r')
+        plt.axvline(x=right_y_int_mean, linewidth=1, color='k')
+
+        plt.savefig(output_file_prefix + "-4-lines.jpg")
 
     if single_line:
+        global g_top_of_mask
+
+        draw_full_line = False
+
         color = [0, 255, 0]
         # We now have the slope and y-intercept of the 2 lines we want to draw.
+        if draw_full_line:
+            x1 = 0
+            y1 = int(round(left_y_int_mean))
+            y2 = 0
+            x2 = int(round((y2 - left_y_int_mean) / left_mean))
+            cv2.line(img, (x1, y1), (x2, y2), [0, 255, 0], thickness)
+
+            x1 = 0
+            y1 = int(round(right_y_int_mean))
+            y2 = height-1
+            x2 = int(round((y2 - y1) / right_mean))
+            cv2.line(img, (x1, y1), (x2, y2), [0, 255, 0], thickness)
+
         x1 = 0
         y1 = int(round(left_y_int_mean))
-        y2 = 0
-        x2 = int(round((y2 - y1) / left_mean))
+        y2 = g_top_of_mask
+        x2 = int(round((y2 - left_y_int_mean) / left_mean))
         cv2.line(img, (x1, y1), (x2, y2), color, thickness)
 
-        x1 = 0
-        y1 = int(round(right_y_int_mean))
+        y1 = g_top_of_mask
+        x1 = int(round((y1 - right_y_int_mean) / right_mean))
         y2 = height-1
-        x2 = int(round((y2 - y1) / right_mean))
+        x2 = int(round((y2 - right_y_int_mean) / right_mean))
         cv2.line(img, (x1, y1), (x2, y2), color, thickness)
 
-
-
-    plt.subplot(3,1,3)
-    plt.hist(list_lengths, nbins)
-    plt.title('lengths')
-    plt.grid()
-
-    global g_debug_frame
-    global g_debug_output_filename_no_ext
-    if g_debug_frame:
-        plt.savefig(g_debug_output_filename_no_ext + "-4-lines.jpg")
     
 def hough_lines(img, rho, theta, threshold, min_line_len, max_line_gap, single_line=False):
     """
@@ -234,11 +285,20 @@ def main_loop():
 
     #imshow_full_size(gray, cmap='gray')
 
-    top_of_mask = 310
-    lower_left  = (140, height-1)
-    upper_left  = (475, top_of_mask)
-    upper_right = (500, top_of_mask)
-    lower_right = (860, height-1)
+    use_hardcoded_for_960x540 = True
+
+    if use_hardcoded_for_960x540:
+        top_of_mask = 310
+        lower_left  = (140, height-1)
+        upper_left  = (475, top_of_mask)
+        upper_right = (500, top_of_mask)
+        lower_right = (860, height-1)
+    else:
+        top_of_mask = int(round(0.58 * height))
+        lower_left  = (int(round(0.15 * width)), height-1)
+        upper_left  = (int(round(0.45 * width)), top_of_mask)
+        upper_right = (int(round(0.60 * width)), top_of_mask)
+        lower_right = (int(round(0.91 * width)), height-1)
 
     bounding_shape = np.array([[lower_left, upper_left, upper_right, lower_right]], dtype=np.int32)
     masked_gray = region_of_interest(gray, bounding_shape)
@@ -412,11 +472,21 @@ def process_image(image):
     if g_debug_frame:
         mpimg.imsave(output_file_prefix + "-1-gray.jpg", gray, cmap='gray')
 
-    top_of_mask = 317
-    lower_left  = (140, height-1)
-    upper_left  = (450, top_of_mask)
-    upper_right = (500, top_of_mask)
-    lower_right = (900, height-1)
+    use_hardcoded_for_960x540 = False
+
+    global g_top_of_mask
+    if use_hardcoded_for_960x540:
+        g_top_of_mask = 317
+        lower_left  = (140, height-1)
+        upper_left  = (450, g_top_of_mask)
+        upper_right = (500, g_top_of_mask)
+        lower_right = (900, height-1)
+    else:
+        g_top_of_mask = int(round(0.59 * height))
+        lower_left  = (int(round(0.15 * width)), height-1)
+        upper_left  = (int(round(0.40 * width)), g_top_of_mask)
+        upper_right = (int(round(0.60 * width)), g_top_of_mask)
+        lower_right = (int(round(0.91 * width)), height-1)
 
     bounding_shape = np.array([[lower_left, upper_left, upper_right, lower_right]], dtype=np.int32)
     masked_gray = region_of_interest(gray, bounding_shape)
@@ -460,7 +530,7 @@ def process_image(image):
         if g_debug_frame_count != "":
             g_debug_frame_count = g_debug_frame_count + 1
         mpimg.imsave(output_file_prefix + "-5-final.jpg", lines_edges)
-        g_debug_frame = False
+        #g_debug_frame = False
 
     return lines_edges
 
@@ -486,8 +556,8 @@ def movie(filename, output_dir_name, debug=False):
     ## To do so add .subclip(start_second,end_second) to the end of the line below
     ## Where start_second and end_second are integer values representing the start and end of the subclip
     ## You may also uncomment the following line for a subclip of the first 5 seconds
-    #clip = VideoFileClip(filename).subclip(0,1)
-    clip = VideoFileClip(filename)
+    clip = VideoFileClip(filename).subclip(0,5)
+    #clip = VideoFileClip(filename)
     processed_clip = clip.fl_image(process_image) #NOTE: this function expects color images!!
     processed_clip.write_videofile(output, audio=False)
 
@@ -495,17 +565,16 @@ def movies_loop():
     input_dir_name = "test_videos"
     video_files = [f for f in os.listdir(input_dir_name) if os.path.isfile(os.path.join(input_dir_name, f))]
     video_files = [
-                   "test_videos/solidWhiteRight.mp4",
-                   "test_videos/solidYellowLeft.mp4",
+                   #"test_videos/solidWhiteRight.mp4",
+                   #"test_videos/solidYellowLeft.mp4",
                    "test_videos/challenge.mp4",
     ]
     print(video_files)
 
     for filename in video_files:
-        movie(filename, "test_videos_output", debug=False)
+        movie(filename, "test_videos_output", debug=True)
 
 #main_loop()
 #kernels_loop()
 file_loop()
 #movies_loop()
-
