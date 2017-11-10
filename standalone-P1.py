@@ -6,6 +6,7 @@ import matplotlib.image as mpimg
 import numpy as np
 import cv2
 import statistics
+import os
 #%matplotlib inline
 
 import math
@@ -72,6 +73,22 @@ def line_fit(x1,y1,x2,y2):
 
     return (slope, y_intercept)
 
+g_previous_left_slopes = []
+g_previous_left_y_ints = []
+g_previous_right_slopes = []
+g_previous_right_y_ints = []
+
+def init_lines():
+    global g_previous_left_slopes
+    global g_previous_left_y_ints
+    global g_previous_right_slopes
+    global g_previous_right_y_ints
+
+    g_previous_left_slopes = []
+    g_previous_left_y_ints = []
+    g_previous_right_slopes = []
+    g_previous_right_y_ints = []
+
 def draw_lines(img, lines, color=[255, 0, 0], thickness=2, single_line=False):
     """
     NOTE: this is the function you might want to use as a starting point once you want to 
@@ -92,11 +109,9 @@ def draw_lines(img, lines, color=[255, 0, 0], thickness=2, single_line=False):
     #print("drawing %d lines" % (len(lines)))
     height, width, depth = img.shape
 
-    stop_at = 100
-
     list_lengths = []
     list_slopes = []
-    list_yints = []
+    list_y_ints = []
 
     for index, line in enumerate(lines):
         #print("line #", index)
@@ -107,15 +122,10 @@ def draw_lines(img, lines, color=[255, 0, 0], thickness=2, single_line=False):
             #print("(%d, %d) (%d, %d) len: %5.2f slope: %5.2f y_int: %5.2f" % (x1, y1, x2, y2, line_len, slope, y_intercept))
             list_lengths.append(line_len)
             list_slopes.append(slope)
-            list_yints.append(y_intercept)
+            list_y_ints.append(y_intercept)
 
             if single_line == False:
                 cv2.line(img, (x1, y1), (x2, y2), color, thickness)
-
-            #if index >= stop_at:
-                #break
-        #if index >= stop_at:
-            #break
 
     if single_line == False:
         return
@@ -133,12 +143,12 @@ def draw_lines(img, lines, color=[255, 0, 0], thickness=2, single_line=False):
 
         plt.figure()
         plt.subplot(3,1,1)
-        plt.hist(list_slopes, nbins, range=(-0.1, 2))
+        plt.hist(list_slopes, nbins)#, range=(-2.0, 2))
         plt.title('slopes')
         plt.grid()
 
         plt.subplot(3,1,2)
-        plt.hist(list_yints, nbins)
+        plt.hist(list_y_ints, nbins)
         plt.title('yints')
         plt.grid()
         
@@ -161,7 +171,7 @@ def draw_lines(img, lines, color=[255, 0, 0], thickness=2, single_line=False):
             print("ERROR: right_index_slopes too small ")
         print("ERROR: list_lengths:" , list_lengths)
         print("ERROR: list_slopes:" , list_slopes)
-        print("ERROR: list_yints:" , list_yints)
+        print("ERROR: list_y_ints:" , list_y_ints)
         if g_debug_frame:
             plt.savefig(output_file_prefix + "-4-lines-ERROR.jpg")
 
@@ -173,9 +183,9 @@ def draw_lines(img, lines, color=[255, 0, 0], thickness=2, single_line=False):
     left_mean  = statistics.mean(left_slopes)
     right_mean = statistics.mean(right_slopes)
 
-    left_y_ints = [list_yints[i] for i in left_indices]
+    left_y_ints = [list_y_ints[i] for i in left_indices]
     left_y_int_mean = statistics.mean(left_y_ints)
-    right_y_ints = [list_yints[i] for i in right_indices]
+    right_y_ints = [list_y_ints[i] for i in right_indices]
     right_y_int_mean = statistics.mean(right_y_ints)
 
     if g_debug_frame:
@@ -192,7 +202,30 @@ def draw_lines(img, lines, color=[255, 0, 0], thickness=2, single_line=False):
         plt.savefig(output_file_prefix + "-4-lines.jpg")
 
     if single_line:
+
+        global g_previous_left_slopes
+        global g_previous_left_y_ints
+        global g_previous_right_slopes
+        global g_previous_right_y_ints
         global g_top_of_mask
+    
+        max_previous_entries = 10
+
+        g_previous_left_slopes.append(left_mean)
+        g_previous_left_y_ints.append(left_y_int_mean)
+        g_previous_right_slopes.append(right_mean)
+        g_previous_right_y_ints.append(right_y_int_mean)
+    
+        if len(g_previous_left_slopes) > max_previous_entries:
+            g_previous_left_slopes.pop(0)
+            g_previous_left_y_ints.pop(0)
+            g_previous_right_slopes.pop(0)
+            g_previous_right_y_ints.pop(0)
+    
+        left_mean = statistics.mean(g_previous_left_slopes)
+        left_y_int_mean = statistics.mean(g_previous_left_y_ints)
+        right_mean = statistics.mean(g_previous_right_slopes)
+        right_y_int_mean = statistics.mean(g_previous_right_y_ints)
 
         draw_full_line = False
 
@@ -267,154 +300,6 @@ def imshow_full_size(img, title=False, *args, **kwargs):
         plt.title(title)
     plt.show()
 
-def main_loop():
-    #reading in an image
-    image = mpimg.imread('test_images/solidWhiteRight.jpg')
-
-    height, width, depth = image.shape
-
-    #printing out some stats and plotting
-    print('This image is:', type(image), 'with dimensions:', image.shape)
-    #imshow_full_size(image)
-
-    # To show multiple images, call plt.figure() start a new figure.
-    # Subsequent calls to plt.imshow() will appear in a new window.
-
-    # Convert to grayscale
-    gray = cv2.cvtColor(image,cv2.COLOR_RGB2GRAY)
-
-    #imshow_full_size(gray, cmap='gray')
-
-    use_hardcoded_for_960x540 = True
-
-    if use_hardcoded_for_960x540:
-        top_of_mask = 310
-        lower_left  = (140, height-1)
-        upper_left  = (475, top_of_mask)
-        upper_right = (500, top_of_mask)
-        lower_right = (860, height-1)
-    else:
-        top_of_mask = int(round(0.58 * height))
-        lower_left  = (int(round(0.15 * width)), height-1)
-        upper_left  = (int(round(0.45 * width)), top_of_mask)
-        upper_right = (int(round(0.60 * width)), top_of_mask)
-        lower_right = (int(round(0.91 * width)), height-1)
-
-    bounding_shape = np.array([[lower_left, upper_left, upper_right, lower_right]], dtype=np.int32)
-    masked_gray = region_of_interest(gray, bounding_shape)
-    #imshow_full_size(masked_gray, cmap='gray')
-
-    #kernels_loop(gray, bounding_shape)
-    hough_loop(gray, bounding_shape)
-
-def kernels_loop(gray, bounding_shape):
-    plt.figure()
-    # Define a kernel size and apply Gaussian smoothing
-    kernels = [5]
-    subplot_rows = 3
-    subplot_cols = len(kernels)
-    for index, kernel in enumerate(kernels):
-        subplot_index = index+1
-        plt.subplot(subplot_rows, subplot_cols,subplot_index)
-        blur_gray = gaussian_blur(gray, kernel)
-        plt.title(subplot_index)
-        plt.imshow(blur_gray, cmap='gray')
-        
-        # Define our parameters for Canny and apply
-        low_threshold = 50
-        high_threshold = 150
-        edges = canny(blur_gray, low_threshold, high_threshold)
-    
-        #plt.subplot(subplot_rows, subplot_cols,index+(subplot_cols*1)+1)
-        #plt.imshow(edges, cmap='gray')
-        #imshow_full_size(edges, cmap='gray')
-        #imshow_full_size(edges, cmap='Greys_r') # Udacity quiz uses Greys_r
-    
-        masked_canny = region_of_interest(edges, bounding_shape)
-        plt.subplot(subplot_rows, subplot_cols,index+(subplot_cols*1)+1)
-        plt.imshow(masked_canny, cmap='gray')
-        #imshow_full_size(masked_canny, cmap='gray')
-    
-        # Define the Hough transform parameters
-        # Original from offical lecture 'solution'
-        #   rho = 2 # distance resolution in pixels of the Hough grid
-        #   theta = np.pi/180 # angular resolution in radians of the Hough grid
-        #   threshold = 15     # minimum number of votes (intersections in Hough grid cell)
-        #   min_line_length = 30 #minimum number of pixels making up a line
-        #   max_line_gap = 20    # maximum gap in pixels between connectable line segments
-        #
-        # My values determined by trial and error
-        rho = 2 # distance resolution in pixels of the Hough grid
-        theta = np.pi/180 # angular resolution in radians of the Hough grid
-        threshold = 15     # minimum number of votes (intersections in Hough grid cell)
-        min_line_length = 10 #minimum number of pixels making up a line
-        max_line_gap = 10    # maximum gap in pixels between connectable line segments
-        houghed_img = hough_lines(masked_canny, rho, theta, threshold, min_line_length, max_line_gap)
-    
-        #plt.subplot(subplot_rows, subplot_cols,index+(subplot_cols*3)+1)
-        #plt.imshow(houghed_img)
-        #imshow_full_size(houghed_img)
-    
-        # Create a "color" binary image to combine with line image
-        color_edges = np.dstack((edges, edges, edges)) 
-    
-        # Draw the lines on the edge image
-        lines_edges = cv2.addWeighted(color_edges, 0.8, houghed_img, 1, 0) 
-        plt.subplot(subplot_rows, subplot_cols,index+(subplot_cols*2)+1)
-        plt.imshow(lines_edges)
-        #imshow_full_size(lines_edges)
-    
-    plt.subplots_adjust(left=0.0, bottom=0, right=1, top=1,
-                    wspace=0.02, hspace=0.02)
-    plt.show()
-
-def hough_loop(gray, bounding_shape):
-    kernel = 5
-    blur_gray = gaussian_blur(gray, kernel)
-
-    # Define our parameters for Canny and apply
-    low_threshold = 50
-    high_threshold = 150
-    edges = canny(blur_gray, low_threshold, high_threshold)
-    masked_canny = region_of_interest(edges, bounding_shape)
-
-    plt.figure()
-
-    subplot_rows = 2
-    params = [5,7,10,12,15]
-    subplot_cols = 3
-    subplot_index = 1
-
-    plt.subplot(subplot_rows, subplot_cols, subplot_index)
-    subplot_index = subplot_index + 1
-    plt.imshow(masked_canny, cmap='gray')
-
-    # Define the Hough transform parameters
-    rho = 2 # distance resolution in pixels of the Hough grid
-    theta = np.pi/180 # angular resolution in radians of the Hough grid
-    threshold = 15     # minimum number of votes (intersections in Hough grid cell)
-    min_line_length = 10 #minimum number of pixels making up a line
-    max_line_gap = 10    # maximum gap in pixels between connectable line segments
-
-    # Create a "color" binary image to combine with line image
-    color_edges = np.dstack((edges, edges, edges)) 
-
-    for index, value in enumerate(params):
-        houghed_img = hough_lines(masked_canny, rho, theta, threshold, min_line_length, max_line_gap)
-
-        # Draw the lines on the edge image
-        lines_edges = cv2.addWeighted(color_edges, 0.8, houghed_img, 1, 0) 
-        plt.subplot(subplot_rows, subplot_cols, subplot_index)
-        subplot_index = subplot_index + 1
-        plt.imshow(lines_edges)
-        plt.title(value)
-
-    plt.subplots_adjust(left=0.0, bottom=0, right=1, top=1,
-                    wspace=0.02, hspace=0.02)
-    plt.show()
-
-import os
-
 def find_lanes_in_file(filename, output_dir_name):
     image = mpimg.imread(filename)
     height, width, depth = image.shape
@@ -432,16 +317,20 @@ def find_lanes_in_file(filename, output_dir_name):
     g_debug_output_filename_no_ext = output_filename_no_ext
     g_debug_frame_count = ""
 
+    init_lines()
+
     process_image(image)
 
 
 def file_loop():
     input_dir_name = "test_images"
     image_files = [f for f in os.listdir(input_dir_name) if os.path.isfile(os.path.join(input_dir_name, f))]
+    image_files = [f for f in image_files if f[0] != "."]
     image_files = [os.path.join(input_dir_name, f) for f in image_files]
     print(image_files)
 
     #find_lanes_in_file("test_images/solidWhiteRight.jpg", "test_images_output")
+    #find_lanes_in_file("test_images/solidYellowLeft.jpg", "test_images_output")
     #return
 
     for filename in image_files:
@@ -552,12 +441,14 @@ def movie(filename, output_dir_name, debug=False):
         g_debug_output_filename_no_ext = output_filename_no_ext
         g_debug_frame_count = 0
 
+    init_lines()
+
     ## To speed up the testing process you may want to try your pipeline on a shorter subclip of the video
     ## To do so add .subclip(start_second,end_second) to the end of the line below
     ## Where start_second and end_second are integer values representing the start and end of the subclip
     ## You may also uncomment the following line for a subclip of the first 5 seconds
-    clip = VideoFileClip(filename).subclip(0,5)
-    #clip = VideoFileClip(filename)
+    #clip = VideoFileClip(filename).subclip(0,5)
+    clip = VideoFileClip(filename)
     processed_clip = clip.fl_image(process_image) #NOTE: this function expects color images!!
     processed_clip.write_videofile(output, audio=False)
 
@@ -565,16 +456,14 @@ def movies_loop():
     input_dir_name = "test_videos"
     video_files = [f for f in os.listdir(input_dir_name) if os.path.isfile(os.path.join(input_dir_name, f))]
     video_files = [
-                   #"test_videos/solidWhiteRight.mp4",
-                   #"test_videos/solidYellowLeft.mp4",
+                   "test_videos/solidWhiteRight.mp4",
+                   "test_videos/solidYellowLeft.mp4",
                    "test_videos/challenge.mp4",
     ]
     print(video_files)
 
     for filename in video_files:
-        movie(filename, "test_videos_output", debug=True)
+        movie(filename, "test_videos_output", debug=False)
 
-#main_loop()
-#kernels_loop()
-file_loop()
-#movies_loop()
+#file_loop()
+movies_loop()
