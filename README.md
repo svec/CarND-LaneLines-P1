@@ -3,6 +3,14 @@
 
 <img src="examples/laneLines_thirdPass.jpg" width="480" alt="Combined Image" />
 
+# Note:
+
+You can read my final project writeup in the P1-writeup.md file in the main repo directory.
+
+I'm leaving the rest of this README.md file as-is.
+
+---
+
 Overview
 ---
 
