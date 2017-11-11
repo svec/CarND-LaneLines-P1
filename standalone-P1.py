@@ -16,6 +16,13 @@ from moviepy.editor import VideoFileClip
 from IPython.display import HTML
 
 g_top_of_mask = 0
+g_previous_left_slopes = []
+g_previous_left_y_ints = []
+g_previous_right_slopes = []
+g_previous_right_y_ints = []
+g_debug_frame = False
+g_debug_output_filename_no_ext = ""
+g_debug_frame_count = ""
 
 def grayscale(img):
     """Applies the Grayscale transform
@@ -73,11 +80,6 @@ def line_fit(x1,y1,x2,y2):
 
     return (slope, y_intercept)
 
-g_previous_left_slopes = []
-g_previous_left_y_ints = []
-g_previous_right_slopes = []
-g_previous_right_y_ints = []
-
 def init_lines():
     global g_previous_left_slopes
     global g_previous_left_y_ints
@@ -106,7 +108,6 @@ def draw_lines(img, lines, color=[255, 0, 0], thickness=2, single_line=False):
     If you want to make the lines semi-transparent, think about combining
     this function with the weighted_img() function below
     """
-    #print("drawing %d lines" % (len(lines)))
     height, width, depth = img.shape
 
     list_lengths = []
@@ -114,7 +115,6 @@ def draw_lines(img, lines, color=[255, 0, 0], thickness=2, single_line=False):
     list_y_ints = []
 
     for index, line in enumerate(lines):
-        #print("line #", index)
         for x1,y1,x2,y2 in line:
             slope, y_intercept = line_fit(x1,y1,x2,y2)
             line_len = math.sqrt((x2 - x1)**2 + (y2 - y1)**2)
@@ -129,7 +129,6 @@ def draw_lines(img, lines, color=[255, 0, 0], thickness=2, single_line=False):
 
     if single_line == False:
         return
-
 
     global g_debug_frame
     global g_debug_output_filename_no_ext
@@ -165,16 +164,16 @@ def draw_lines(img, lines, color=[255, 0, 0], thickness=2, single_line=False):
     if (len(left_index_slopes) < 2) or (len(right_index_slopes) < 2):
         cv2.putText(img, "ERROR FINDING LANES", (100, 100), cv2.FONT_HERSHEY_SIMPLEX, 2, 255, thickness=3)
 
-        if (len(left_index_slopes) < 2): 
-            print("ERROR: left_index_slopes too small ")
-        if (len(right_index_slopes) < 2): 
-            print("ERROR: right_index_slopes too small ")
-        print("ERROR: list_lengths:" , list_lengths)
-        print("ERROR: list_slopes:" , list_slopes)
-        print("ERROR: list_y_ints:" , list_y_ints)
         if g_debug_frame:
-            plt.savefig(output_file_prefix + "-4-lines-ERROR.jpg")
+            if (len(left_index_slopes) < 2): 
+                print("ERROR: left_index_slopes too small ")
+            if (len(right_index_slopes) < 2): 
+                print("ERROR: right_index_slopes too small ")
+            print("ERROR: list_lengths:" , list_lengths)
+            print("ERROR: list_slopes:" , list_slopes)
+            print("ERROR: list_y_ints:" , list_y_ints)
 
+            plt.savefig(output_file_prefix + "-4-lines-ERROR.jpg")
                 
         return
 
@@ -229,20 +228,19 @@ def draw_lines(img, lines, color=[255, 0, 0], thickness=2, single_line=False):
 
         draw_full_line = False
 
-        color = [0, 255, 0]
         # We now have the slope and y-intercept of the 2 lines we want to draw.
         if draw_full_line:
             x1 = 0
             y1 = int(round(left_y_int_mean))
             y2 = 0
             x2 = int(round((y2 - left_y_int_mean) / left_mean))
-            cv2.line(img, (x1, y1), (x2, y2), [0, 255, 0], thickness)
+            cv2.line(img, (x1, y1), (x2, y2), color, thickness)
 
             x1 = 0
             y1 = int(round(right_y_int_mean))
             y2 = height-1
             x2 = int(round((y2 - y1) / right_mean))
-            cv2.line(img, (x1, y1), (x2, y2), [0, 255, 0], thickness)
+            cv2.line(img, (x1, y1), (x2, y2), color, thickness)
 
         x1 = 0
         y1 = int(round(left_y_int_mean))
@@ -265,7 +263,7 @@ def hough_lines(img, rho, theta, threshold, min_line_len, max_line_gap, single_l
     """
     lines = cv2.HoughLinesP(img, rho, theta, threshold, np.array([]), minLineLength=min_line_len, maxLineGap=max_line_gap)
     line_img = np.zeros((img.shape[0], img.shape[1], 3), dtype=np.uint8)
-    draw_lines(line_img, lines, color=[255,0,0], thickness=4, single_line=single_line)
+    draw_lines(line_img, lines, color=[255,0,0], thickness=6, single_line=single_line)
     return line_img
 
 # Python 3 has support for cool math symbols.
@@ -307,27 +305,28 @@ def find_lanes_in_file(filename, output_dir_name):
     base_filename, file_ext = os.path.splitext(os.path.basename(filename))
     output_filename_no_ext = os.path.join(output_dir_name, base_filename)
 
-    print("#", base_filename, "#", file_ext, "#", output_filename_no_ext, "#")
+    #print("#", base_filename, "#", file_ext, "#", output_filename_no_ext, "#")
 
     global g_debug_frame
     global g_debug_output_filename_no_ext
     global g_debug_frame_count
 
-    g_debug_frame = True
+    g_debug_frame = False
     g_debug_output_filename_no_ext = output_filename_no_ext
     g_debug_frame_count = ""
 
     init_lines()
 
-    process_image(image)
+    final_image = process_image(image)
 
+    mpimg.imsave(output_filename_no_ext + "-final.jpg", final_image)
 
 def file_loop():
     input_dir_name = "test_images"
     image_files = [f for f in os.listdir(input_dir_name) if os.path.isfile(os.path.join(input_dir_name, f))]
     image_files = [f for f in image_files if f[0] != "."]
     image_files = [os.path.join(input_dir_name, f) for f in image_files]
-    print(image_files)
+    #print(image_files)
 
     #find_lanes_in_file("test_images/solidWhiteRight.jpg", "test_images_output")
     #find_lanes_in_file("test_images/solidYellowLeft.jpg", "test_images_output")
@@ -335,10 +334,6 @@ def file_loop():
 
     for filename in image_files:
         find_lanes_in_file(filename, "test_images_output")
-
-g_debug_frame = False
-g_debug_output_filename_no_ext = ""
-g_debug_frame_count = ""
 
 def process_image(image):
     # NOTE: The output you return should be a color image (3 channel) for processing video below
@@ -419,7 +414,6 @@ def process_image(image):
         if g_debug_frame_count != "":
             g_debug_frame_count = g_debug_frame_count + 1
         mpimg.imsave(output_file_prefix + "-5-final.jpg", lines_edges)
-        #g_debug_frame = False
 
     return lines_edges
 
@@ -427,7 +421,7 @@ def movie(filename, output_dir_name, debug=False):
 
     base_filename, file_ext = os.path.splitext(os.path.basename(filename))
     output_filename_no_ext = os.path.join(output_dir_name, base_filename)
-    print("#", base_filename, "#", file_ext, "#", output_filename_no_ext, "#")
+    #print("#", base_filename, "#", file_ext, "#", output_filename_no_ext, "#")
 
     output = output_filename_no_ext + file_ext
 
@@ -460,10 +454,10 @@ def movies_loop():
                    "test_videos/solidYellowLeft.mp4",
                    "test_videos/challenge.mp4",
     ]
-    print(video_files)
+    #print(video_files)
 
     for filename in video_files:
         movie(filename, "test_videos_output", debug=False)
 
-#file_loop()
-movies_loop()
+file_loop()
+#movies_loop()
