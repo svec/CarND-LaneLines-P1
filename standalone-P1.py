@@ -156,12 +156,12 @@ def draw_lines(img, lines, color=[255, 0, 0], thickness=2, single_line=False):
         plt.title('lengths')
         plt.grid()
         
-
-
+    # Find the slopes of lines that that could be left or right lanes.
     left_index_slopes =  [(index, value) for index, value in enumerate(list_slopes) if ((value > -0.9) and (value < -0.5))]
     right_index_slopes = [(index, value) for index, value in enumerate(list_slopes) if ((value >  0.5) and (value < 0.7))]
 
     if (len(left_index_slopes) < 2) or (len(right_index_slopes) < 2):
+        # Unfortunately we couldn't find the lanes - write a big warning message on the image.
         cv2.putText(img, "ERROR FINDING LANES", (100, 100), cv2.FONT_HERSHEY_SIMPLEX, 2, 255, thickness=3)
 
         if g_debug_frame:
@@ -177,11 +177,16 @@ def draw_lines(img, lines, color=[255, 0, 0], thickness=2, single_line=False):
                 
         return
 
+    # Calculate the mean of the slopes that look like left lanes, and then right lanes -
+    # that mean will be the slope of the single lane line we use.
     left_indices,  left_slopes  = zip(*left_index_slopes)
     right_indices, right_slopes = zip(*right_index_slopes)
-    left_mean  = statistics.mean(left_slopes)
-    right_mean = statistics.mean(right_slopes)
+    left_slope  = statistics.mean(left_slopes)
+    right_slope = statistics.mean(right_slopes)
 
+    # Find the y intercept for each line whose slope looked like a left or right lane.
+    # Get the mean of those y intercepts: that will be the y intercept of the single lane line
+    # we use.
     left_y_ints = [list_y_ints[i] for i in left_indices]
     left_y_int_mean = statistics.mean(left_y_ints)
     right_y_ints = [list_y_ints[i] for i in right_indices]
@@ -190,8 +195,8 @@ def draw_lines(img, lines, color=[255, 0, 0], thickness=2, single_line=False):
     if g_debug_frame:
         plt.subplot(3,1,1)
 
-        plt.axvline(x=left_mean, linewidth=1, color='r')
-        plt.axvline(x=right_mean, linewidth=1, color='k')
+        plt.axvline(x=left_slope, linewidth=1, color='r')
+        plt.axvline(x=right_slope, linewidth=1, color='k')
 
         plt.subplot(3,1,2)
         
@@ -208,11 +213,13 @@ def draw_lines(img, lines, color=[255, 0, 0], thickness=2, single_line=False):
         global g_previous_right_y_ints
         global g_top_of_mask
     
+        # Calculate a running average of the last 10 slopes and y intercepts
+        # to smooth out noise across frame-by-frame measurements.
         max_previous_entries = 10
 
-        g_previous_left_slopes.append(left_mean)
+        g_previous_left_slopes.append(left_slope)
         g_previous_left_y_ints.append(left_y_int_mean)
-        g_previous_right_slopes.append(right_mean)
+        g_previous_right_slopes.append(right_slope)
         g_previous_right_y_ints.append(right_y_int_mean)
     
         if len(g_previous_left_slopes) > max_previous_entries:
@@ -221,40 +228,39 @@ def draw_lines(img, lines, color=[255, 0, 0], thickness=2, single_line=False):
             g_previous_right_slopes.pop(0)
             g_previous_right_y_ints.pop(0)
     
-        left_mean = statistics.mean(g_previous_left_slopes)
+        left_slope = statistics.mean(g_previous_left_slopes)
         left_y_int_mean = statistics.mean(g_previous_left_y_ints)
-        right_mean = statistics.mean(g_previous_right_slopes)
+        right_slope = statistics.mean(g_previous_right_slopes)
         right_y_int_mean = statistics.mean(g_previous_right_y_ints)
 
-        draw_full_line = False
+        draw_full_line = False # used for debug
 
         # We now have the slope and y-intercept of the 2 lines we want to draw.
         if draw_full_line:
             x1 = 0
             y1 = int(round(left_y_int_mean))
             y2 = 0
-            x2 = int(round((y2 - left_y_int_mean) / left_mean))
+            x2 = int(round((y2 - left_y_int_mean) / left_slope))
             cv2.line(img, (x1, y1), (x2, y2), color, thickness)
 
             x1 = 0
             y1 = int(round(right_y_int_mean))
             y2 = height-1
-            x2 = int(round((y2 - y1) / right_mean))
+            x2 = int(round((y2 - y1) / right_slope))
             cv2.line(img, (x1, y1), (x2, y2), color, thickness)
 
         x1 = 0
         y1 = int(round(left_y_int_mean))
         y2 = g_top_of_mask
-        x2 = int(round((y2 - left_y_int_mean) / left_mean))
+        x2 = int(round((y2 - left_y_int_mean) / left_slope))
         cv2.line(img, (x1, y1), (x2, y2), color, thickness)
 
         y1 = g_top_of_mask
-        x1 = int(round((y1 - right_y_int_mean) / right_mean))
+        x1 = int(round((y1 - right_y_int_mean) / right_slope))
         y2 = height-1
-        x2 = int(round((y2 - right_y_int_mean) / right_mean))
+        x2 = int(round((y2 - right_y_int_mean) / right_slope))
         cv2.line(img, (x1, y1), (x2, y2), color, thickness)
 
-    
 def hough_lines(img, rho, theta, threshold, min_line_len, max_line_gap, single_line=False):
     """
     `img` should be the output of a Canny transform.
@@ -350,13 +356,14 @@ def process_image(image):
         if g_debug_frame_count != "":
             output_file_prefix = output_file_prefix + "-" + str(g_debug_frame_count)
         mpimg.imsave(output_file_prefix + "-0-orig.jpg", image)
-    # Convert to grayscale
+
+    # Step 1. Convert the image to grayscale so Canny filter can be applied.
     gray = cv2.cvtColor(image,cv2.COLOR_RGB2GRAY)
 
     if g_debug_frame:
         mpimg.imsave(output_file_prefix + "-1-gray.jpg", gray, cmap='gray')
 
-    use_hardcoded_for_960x540 = False
+    use_hardcoded_for_960x540 = False # used this for debug
 
     global g_top_of_mask
     if use_hardcoded_for_960x540:
@@ -372,12 +379,16 @@ def process_image(image):
         upper_right = (int(round(0.60 * width)), g_top_of_mask)
         lower_right = (int(round(0.91 * width)), height-1)
 
+    # Step 2. Keep only the part of the image likely to have lanes on it: right in front of the car.
+    #
+    # (Keeps only the middle/bottom part of the image.)
     bounding_shape = np.array([[lower_left, upper_left, upper_right, lower_right]], dtype=np.int32)
     masked_gray = region_of_interest(gray, bounding_shape)
 
     if g_debug_frame:
         mpimg.imsave(output_file_prefix + "-2-gray-masked.jpg", masked_gray, cmap='gray')
 
+    # Step 3. Blur the image, then run the Canny filter on it to find edges.
     kernel = 5
     blur_gray = gaussian_blur(gray, kernel)
 
@@ -397,17 +408,20 @@ def process_image(image):
     min_line_length = 10 #minimum number of pixels making up a line
     max_line_gap = 10    # maximum gap in pixels between connectable line segments
 
-    houghed_img = hough_lines(masked_canny, rho, theta, threshold, min_line_length, max_line_gap, single_line=False)
-
     if g_debug_frame:
+        # This also runs the Hough transform, but is only used for debugging.
+        houghed_img = hough_lines(masked_canny, rho, theta, threshold, min_line_length, max_line_gap, single_line=False)
+
         mpimg.imsave(output_file_prefix + "-4-hough.jpg", houghed_img)
 
+    # Step 4. Run the Hough transform to find line sections. After the Hough transform is complete,
+    # hough_lines() also runs draw_lines() to find a single left and right lane line.
     houghed_img = hough_lines(masked_canny, rho, theta, threshold, min_line_length, max_line_gap, single_line=True)
 
     if g_debug_frame:
         mpimg.imsave(output_file_prefix + "-4-hough-oneline.jpg", houghed_img)
 
-    # Draw the lines on the original image
+    # Step 5. Draw the lines on the original image
     lines_edges = cv2.addWeighted(image, 0.8, houghed_img, 1, 0) 
 
     if g_debug_frame:
@@ -459,5 +473,5 @@ def movies_loop():
     for filename in video_files:
         movie(filename, "test_videos_output", debug=False)
 
-file_loop()
-#movies_loop()
+#file_loop()
+movies_loop()
