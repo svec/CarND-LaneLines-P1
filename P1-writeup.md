@@ -154,7 +154,7 @@ Success!
 My pipeline performed well for all the instructor-provided images, and the
 `solidWhiteRight.mp4` and `solidYellowLeft.mp4` video files.
 
-The lane lines found were relatively accurate. If a self-driving car
+The lane lines found were relatively accurate.
 
 The `challenge.mp4` video provided some, well, challenges.
 
